@@ -31,6 +31,11 @@ from .layers import BayesianLinear
 from .losses import ELBO, GaussianNLLLoss, PoissonNLLLoss
 from .utils import plot_loss_history
 
+try:
+    import graphviz
+except ImportError:
+    graphviz = None
+
 
 class BayesianNetwork(nn.Module):
     """
@@ -357,7 +362,8 @@ class BayesianRegressor(BaseEstimator):
                     progress_bar.set_postfix({"Train Loss": f"{avg_train_loss:.4f}"})
                 self.best_model_state = self.model.state_dict()
 
-        # After training, load the best model state (if early stopping was used)
+        # After training, load the best model state
+        # (if early stopping was used)
         if (
             self.early_stopping_patience is not None
             and val_loader
@@ -505,6 +511,84 @@ class BayesianRegressor(BaseEstimator):
     def plot_loss_history(self, title: str = "Training and Validation Loss"):
         """Plots the training and validation loss history."""
         plot_loss_history(self.history, title=title)
+
+    def plot_network_architecture(
+        self,
+        filename: str = "bnn_architecture",
+        format: str = "png",
+        view: bool = False,
+        engine: str = "dot",
+    ):
+        """
+        Generates a visualization of the Bayesian Neural Network architecture.
+
+        Requires the 'graphviz' library and the Graphviz system package
+        to be installed (`pip install graphviz` and system install).
+
+        Args:
+            filename (str): The name of the output file (without extension).
+            format (str): The output format (e.g., 'png', 'pdf', 'svg').
+            view (bool): If True, automatically opens the generated file.
+            engine (str): Layout engine to use (e.g., 'dot', 'neato', 'fdp').
+        """
+        if graphviz is None:
+            print(
+                "Error: 'graphviz' library not found. "
+                "Please install it (`pip install graphviz`) and ensure the "
+                "Graphviz system package is installed."
+            )
+            return
+
+        dot = graphviz.Digraph(
+            comment="Bayesian Neural Network Architecture",
+            graph_attr={"rankdir": "LR", "splines": "line"},
+            node_attr={"shape": "record", "style": "filled", "fillcolor": "lightblue"},
+            edge_attr={"color": "black"},
+        )
+
+        # Input Node
+        input_node_name = "input"
+        dot.node(
+            input_node_name,
+            f"Input\n(dim={self.input_dim})",
+            shape="ellipse",
+            fillcolor="lightgrey",
+        )
+        last_node_name = input_node_name
+
+        # Iterate through layers
+        layer_idx = 0
+        for i, layer in enumerate(self.model.layers):
+            layer_name = f"layer_{layer_idx}"
+            if isinstance(layer, BayesianLinear):
+                in_f = layer.in_features
+                out_f = layer.out_features
+                label = f"BayesianLinear_{layer_idx // 2}\n(in={in_f}, out={out_f})"
+                dot.node(layer_name, label, fillcolor="skyblue")
+                dot.edge(last_node_name, layer_name)
+                last_node_name = layer_name
+            elif isinstance(layer, nn.Module):  # Handle activation layers
+                act_name = layer.__class__.__name__
+                label = f"Activation\n({act_name})"
+                # Add activation as a separate node for clarity
+                act_node_name = f"act_{layer_idx // 2}"
+                dot.node(act_node_name, label, shape="ellipse", fillcolor="lightyellow")
+                dot.edge(last_node_name, act_node_name)
+                last_node_name = act_node_name
+            layer_idx += 1
+
+        # Output Node (representing the distribution parameters)
+        output_node_name = "output"
+        output_label = f"Output\n({self.output_type}, dim={self.output_dim})"
+        dot.node(output_node_name, output_label, shape="ellipse", fillcolor="lightgrey")
+        dot.edge(last_node_name, output_node_name)
+
+        try:
+            dot.render(filename, format=format, view=view, engine=engine, cleanup=True)
+            print(f"Network architecture saved to {filename}.{format}")
+        except Exception as e:
+            print(f"Error rendering graph: {e}")
+            print("Ensure Graphviz is installed and in your system's PATH.")
 
 
 # TODO: Implement BayesianClassifier class (if needed)

@@ -1,0 +1,26 @@
+// Bayesian Neural Network Architecture
+digraph {
+	graph [rankdir=LR splines=line]
+	node [fillcolor=lightblue shape=record style=filled]
+	edge [color=black]
+	input [label="Input
+(dim=1)" fillcolor=lightgrey shape=ellipse]
+	layer_0 [label="BayesianLinear_0
+(in=1, out=32)" fillcolor=skyblue]
+	input -> layer_0
+	act_0 [label="Activation
+(ReLU)" fillcolor=lightyellow shape=ellipse]
+	layer_0 -> act_0
+	layer_2 [label="BayesianLinear_1
+(in=32, out=32)" fillcolor=skyblue]
+	act_0 -> layer_2
+	act_1 [label="Activation
+(ReLU)" fillcolor=lightyellow shape=ellipse]
+	layer_2 -> act_1
+	layer_4 [label="BayesianLinear_2
+(in=32, out=2)" fillcolor=skyblue]
+	act_1 -> layer_4
+	output [label="Output
+(gaussian, dim=2)" fillcolor=lightgrey shape=ellipse]
+	layer_4 -> output
+}

@@ -16,10 +16,80 @@
 import pytest
 import numpy as np
 import torch
+import os
 from bayes_nn.models import BayesianRegressor
 
 
-# Test fixtures (data generation)
+# Simple mock class to simulate graphviz.Digraph
+class MockDigraph:
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+        self.nodes = []
+        self.edges = []
+        # Mock the render method directly on the instance
+        self.render = MockRenderMethod()
+
+    def node(self, name, label, **attrs):
+        self.nodes.append({"name": name, "label": label, "attrs": attrs})
+
+    def edge(self, start, end, **attrs):
+        self.edges.append({"start": start, "end": end, "attrs": attrs})
+
+
+# Simple mock class for the render method call check
+class MockRenderMethod:
+    def __init__(self):
+        self.called = False
+        self.call_args_list = []
+
+    def __call__(self, *args, **kwargs):
+        self.called = True
+        self.call_args_list.append({"args": args, "kwargs": kwargs})
+
+
+# Fixture to mock the graphviz module and its Digraph
+@pytest.fixture
+def mock_graphviz(monkeypatch):
+    class MockGraphvizModule:
+        Digraph = MockDigraph  # Assign the class itself
+
+    # Replace the graphviz import in the models module
+    monkeypatch.setattr("bayes_nn.models.graphviz", MockGraphvizModule)
+    MockGraphvizModule.Digraph.render_mock = MockRenderMethod()
+    original_digraph_init = MockGraphvizModule.Digraph.__init__
+
+    def patched_init(self, *args, **kwargs):
+        original_digraph_init(self, *args, **kwargs)
+        self.render = MockGraphvizModule.Digraph.render_mock
+
+    monkeypatch.setattr(MockGraphvizModule.Digraph, "__init__", patched_init)
+
+    yield MockGraphvizModule.Digraph.render_mock  # Yield the mock method
+
+    # TODO: Teardown (monkeypatch handles revert automatically)
+
+
+# Fixture to simulate graphviz not being installed
+@pytest.fixture
+def mock_graphviz_unavailable(monkeypatch):
+    monkeypatch.setattr("bayes_nn.models.graphviz", None)
+
+
+# --- Model Instance Fixture ---
+@pytest.fixture
+def bayesian_regressor_instance():
+    """Provides a simple BayesianRegressor instance for testing."""
+    return BayesianRegressor(
+        input_dim=2,
+        output_type="gaussian",
+        hidden_dims=[10, 5],
+        n_epochs=1,  # Minimal epochs for init
+        random_state=42,
+    )
+
+
+# --- Data Fixtures ---
 @pytest.fixture
 def linear_regression_data():
     """Generate test data for simple linear regression."""
@@ -61,9 +131,7 @@ def test_bayesian_regressor_gaussian_init():
     )
     assert model is not None
     assert model.output_dim == 2
-    assert isinstance(
-        model.nll_loss_fn, torch.nn.Module
-    )  # Check if it's an instance of GaussianNLLLoss
+    assert isinstance(model.nll_loss_fn, torch.nn.Module)
 
 
 def test_bayesian_regressor_poisson_init():
@@ -77,9 +145,7 @@ def test_bayesian_regressor_poisson_init():
     )
     assert model is not None
     assert model.output_dim == 1
-    assert isinstance(
-        model.nll_loss_fn, torch.nn.Module
-    )  # Check if it's an instance of PoissonNLLLoss
+    assert isinstance(model.nll_loss_fn, torch.nn.Module)
 
 
 def test_bayesian_regressor_gaussian_fit_predict(linear_regression_data):
@@ -90,12 +156,12 @@ def test_bayesian_regressor_gaussian_fit_predict(linear_regression_data):
         output_type="gaussian",
         hidden_dims=[16],
         n_epochs=5,
-        batch_size=16,  # Small number of epochs for testing
+        batch_size=16,
         lr=0.01,
         validation_split=0.2,
         random_state=1,
     )
-    model.fit(X, y, verbose=False)  # Hide progress during testing
+    model.fit(X, y, verbose=False)
 
     # Test predict
     y_pred = model.predict(X)
@@ -108,12 +174,12 @@ def test_bayesian_regressor_gaussian_fit_predict(linear_regression_data):
     assert isinstance(y_pred_std, np.ndarray)
     assert y_pred_mean.shape == (X.shape[0],)
     assert y_pred_std.shape == (X.shape[0],)
-    assert np.all(y_pred_std >= 0)  # Standard deviation should be non-negative
+    assert np.all(y_pred_std >= 0)
 
     # Test predict_proba
     y_samples = model.predict_proba(X, n_samples=10)
     assert isinstance(y_samples, np.ndarray)
-    assert y_samples.shape == (10, X.shape[0], 1)  # (n_samples, num_data, 1)
+    assert y_samples.shape == (10, X.shape[0], 1)
 
     # Test loss history
     assert "train_loss" in model.history
@@ -141,7 +207,7 @@ def test_bayesian_regressor_poisson_fit_predict(poisson_regression_data):
     y_pred = model.predict(X)
     assert isinstance(y_pred, np.ndarray)
     assert y_pred.shape == (X.shape[0],)
-    assert np.all(y_pred >= 0)  # Predicted rate should be non-negative
+    assert np.all(y_pred >= 0)
 
     # Test predict (with standard deviation)
     y_pred_mean, y_pred_std = model.predict(X, return_std=True)
@@ -156,11 +222,7 @@ def test_bayesian_regressor_poisson_fit_predict(poisson_regression_data):
     y_samples = model.predict_proba(X, n_samples=10)
     assert isinstance(y_samples, np.ndarray)
     assert y_samples.shape == (10, X.shape[0], 1)
-    assert np.all(
-        y_samples >= 0
-    )  # Samples from Poisson distribution are non-negative integers
-    # Check for integer type (might have floating point errors)
-    # assert np.all(y_samples == y_samples.astype(int))
+    assert np.all(y_samples >= 0)
 
     # Test loss history
     assert "train_loss" in model.history
@@ -172,3 +234,59 @@ def test_bayesian_regressor_poisson_fit_predict(poisson_regression_data):
 # TODO: Test cases for Early stopping
 # TODO: Test cases for device specification ('cpu', 'cuda')
 # TODO: Tests for the effect of KL term scaling and weight (more advanced)
+
+
+# --- Tests for plot_network_architecture ---
+
+
+def test_plot_network_architecture_calls_render(
+    bayesian_regressor_instance, mock_graphviz
+):
+    """
+    Test if plot_network_architecture calls graphviz.Digraph and render
+    when graphviz is available.
+    """
+    model = bayesian_regressor_instance
+    mock_render_method = mock_graphviz
+
+    # Define filename to avoid default file creation/cleanup issues
+    test_filename = "test_bnn_arch_render"
+    output_file = f"{test_filename}.png"
+    if os.path.exists(output_file):
+        os.remove(output_file)
+
+    model.plot_network_architecture(filename=test_filename, view=False)
+
+    # Check if render was called
+    assert mock_render_method.called, "render() was not called"
+
+    # Check the arguments passed to render
+    assert len(mock_render_method.call_args_list) == 1
+    call_kwargs = mock_render_method.call_args_list[0]["kwargs"]
+    call_args = mock_render_method.call_args_list[0]["args"]
+
+    assert call_args[0] == test_filename  # Check filename positional arg
+    assert call_kwargs.get("format") == "png"
+    assert call_kwargs.get("view") is False
+    assert call_kwargs.get("engine") == "dot"
+    assert call_kwargs.get("cleanup") is True
+
+    # Clean up the dummy file potentially created by the mock if needed
+    if os.path.exists(output_file):
+        os.remove(output_file)
+
+
+def test_plot_network_architecture_handles_no_graphviz(
+    bayesian_regressor_instance, mock_graphviz_unavailable, capsys
+):
+    """
+    Test if plot_network_architecture handles the case where graphviz
+    is not installed (mocked as None).
+    """
+    model = bayesian_regressor_instance
+    model.plot_network_architecture()
+
+    # Capture printed output
+    captured = capsys.readouterr()
+    assert "Error: 'graphviz' library not found" in captured.out
+    assert "Please install it" in captured.out

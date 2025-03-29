@@ -48,10 +48,7 @@ def generate_normal_data(
     X = np.random.rand(n_samples, 1) * 10 - 5  # Input X in the range [-5, 5]
     noise = np.random.normal(0, true_sigma, size=(n_samples, 1))
     y = true_a * X + true_b + noise
-    print(
-        f"Generated data: y = {true_a}*x + {true_b} + "
-        f"N(0, {true_sigma**2:.2f})"
-    )
+    print(f"Generated data: y = {true_a}*x + {true_b} + N(0, {true_sigma**2:.2f})")
     return X, y.flatten()
 
 
@@ -84,9 +81,7 @@ def plot_predictions_gaussian(
     # )  # This is the std dev of E[y] (close to epistemic uncertainty)
 
     # Mean and std dev calculated by predict method (includes aleatoric)
-    y_pred_mean_total, y_pred_std_total = model.predict(
-        X_pred_points, return_std=True
-    )
+    y_pred_mean_total, y_pred_std_total = model.predict(X_pred_points, return_std=True)
 
     # Plot the predictive mean line
     plt.plot(
@@ -151,6 +146,12 @@ if __name__ == "__main__":
         random_state=42,  # Random seed
     )
 
+    # --- 2.5 Plot Network Architecture ---
+    print("\nPlotting network architecture...")
+    bnn_regressor.plot_network_architecture(
+        filename="normal_bnn_architecture", view=False
+    )
+
     # --- 3. Model Training ---
     print("\nStarting training...")
     bnn_regressor.fit(X_train, y_train, verbose=True)
@@ -159,9 +160,7 @@ if __name__ == "__main__":
     # --- 4. Plotting Training Results ---
     # Plot loss history
     # Break plot_loss_history call
-    bnn_regressor.plot_loss_history(
-        title="Gaussian BNN: Training and Validation Loss"
-    )
+    bnn_regressor.plot_loss_history(title="Gaussian BNN: Training and Validation Loss")
 
     # Plot prediction results
     # Break plot_predictions_gaussian call

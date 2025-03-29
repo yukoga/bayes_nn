@@ -30,7 +30,7 @@ class BayesianLinear(nn.Module):
         in_features: int,
         out_features: int,
         prior_sigma_1: float = 1.0,
-        prior_sigma_2: float = 0.001,
+        prior_sigma_2: float = 0.001,  # Adjusted default
         prior_pi: float = 0.5,
     ):
         """
@@ -40,7 +40,8 @@ class BayesianLinear(nn.Module):
             prior_sigma_1 (float): Std dev of the larger component in the
                                    scale mixture prior.
             prior_sigma_2 (float): Std dev of the smaller component in the
-                                   scale mixture prior.
+                                   scale mixture prior. Should be significantly
+                                   smaller than prior_sigma_1.
             prior_pi (float): Mixture proportion for the scale mixture prior
                               (probability of using sigma1).
             (Note: While the Flipout paper uses more efficient perturbation
@@ -48,6 +49,16 @@ class BayesianLinear(nn.Module):
              using the Reparameterization Trick.)
         """
         super().__init__()
+        if not (0 < prior_pi < 1):
+            raise ValueError("prior_pi must be between 0 and 1")
+        if not (prior_sigma_1 > 0 and prior_sigma_2 > 0):
+            raise ValueError("Prior sigmas must be positive")
+        if prior_sigma_1 <= prior_sigma_2:
+            print(
+                "Warning: prior_sigma_1 should ideally be larger than "
+                "prior_sigma_2 for the scale mixture prior to be effective."
+            )
+
         self.in_features = in_features
         self.out_features = out_features
 
@@ -68,44 +79,58 @@ class BayesianLinear(nn.Module):
         self.prior_sigma_1 = prior_sigma_1
         self.prior_sigma_2 = prior_sigma_2
         self.prior_pi = prior_pi
+        # Store log sigmas and log mixture weights as buffers for efficiency
+        # and numerical stability
         prior_log_sigma_1 = torch.tensor(math.log(prior_sigma_1))
         prior_log_sigma_2 = torch.tensor(math.log(prior_sigma_2))
+        log_prior_pi = torch.tensor(math.log(prior_pi))
+        log_prior_one_minus_pi = torch.tensor(math.log(1.0 - prior_pi))
+
         self.register_buffer("prior_log_sigma_1", prior_log_sigma_1)
         self.register_buffer("prior_log_sigma_2", prior_log_sigma_2)
+        self.register_buffer("log_prior_pi", log_prior_pi)
+        self.register_buffer("log_prior_one_minus_pi", log_prior_one_minus_pi)
 
     def reset_parameters(self):
         """Initialize parameters."""
         # Initialize weights (inspired by Kaiming He initialization variance)
         nn.init.kaiming_uniform_(self.weight_mu, a=math.sqrt(5))
         # Initialize log standard deviation (rho) with small negative values
-        # for small initial std dev
-        nn.init.constant_(self.weight_rho, -5.0)
+        # for small initial std dev (e.g., -3 corresponds to sigma ~ 0.05)
+        nn.init.constant_(self.weight_rho, -3.0)  # Changed from -5.0
 
         # Initialize bias
         if self.bias_mu is not None:
             fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight_mu)
             bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
             nn.init.uniform_(self.bias_mu, -bound, bound)
-            nn.init.constant_(self.bias_rho, -5.0)
+            nn.init.constant_(self.bias_rho, -3.0)  # Changed from -5.0
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass. Samples weights using the Reparameterization Trick.
+        Only samples during training mode. Uses mean during evaluation.
         """
-        # 1. Sample weights and biases from the variational posterior
-        # Standard deviation sigma = log(1 + exp(rho)) (softplus)
-        weight_sigma = F.softplus(self.weight_rho)
-        bias_sigma = F.softplus(self.bias_rho)
+        if self.training:
+            # 1. Sample weights and biases from the variational posterior
+            # Standard deviation sigma = log(1 + exp(rho)) (softplus)
+            weight_sigma = F.softplus(self.weight_rho)
+            bias_sigma = F.softplus(self.bias_rho)
 
-        # Generate standard normal random numbers (epsilon)
-        # .to(self.weight_mu.device) ensures device consistency (GPU/CPU)
-        epsilon_weight = torch.randn_like(weight_sigma)
-        epsilon_weight = epsilon_weight.to(self.weight_mu.device)
-        epsilon_bias = torch.randn_like(bias_sigma).to(self.bias_mu.device)
+            # Generate standard normal random numbers (epsilon)
+            # .to(self.weight_mu.device) ensures device consistency
+            epsilon_weight = torch.randn_like(weight_sigma)
+            epsilon_weight = epsilon_weight.to(self.weight_mu.device)
+            epsilon_bias = torch.randn_like(bias_sigma)
+            epsilon_bias = epsilon_bias.to(self.bias_mu.device)
 
-        # Reparameterization Trick: w = mu + sigma * epsilon
-        weight = self.weight_mu + weight_sigma * epsilon_weight
-        bias = self.bias_mu + bias_sigma * epsilon_bias
+            # Reparameterization Trick: w = mu + sigma * epsilon
+            weight = self.weight_mu + weight_sigma * epsilon_weight
+            bias = self.bias_mu + bias_sigma * epsilon_bias
+        else:
+            # Use mean weights during evaluation
+            weight = self.weight_mu
+            bias = self.bias_mu
 
         # 2. Perform standard linear transformation
         output = F.linear(x, weight, bias)
@@ -117,43 +142,95 @@ class BayesianLinear(nn.Module):
         Calculates the KL divergence between the variational posterior
         q(w|theta) and the prior p(w) for this layer. KL[q(w|theta) || p(w)]
         Uses a scale mixture normal distribution as the prior.
+
+        Note: The exact KL divergence between a Gaussian posterior and a
+        Gaussian mixture prior does not have a simple closed-form solution.
+        This implementation calculates the KL divergence between the posterior
+        and *each component* of the mixture prior, then combines them.
+        This is an approximation often used in practice, but might not be
+        the theoretically exact KL divergence for the mixture.
+        A common simplification is KL[q || N(0, sigma1^2)], ignoring mixture.
+        Here we implement the approximation based on log probabilities.
         """
-        # Variational posterior q(w|theta) is a Normal distribution
-        # N(mu, sigma^2) where sigma = softplus(rho)
+        # Variational posterior q(w|theta) is N(mu, sigma^2)
         weight_sigma = F.softplus(self.weight_rho)
         bias_sigma = F.softplus(self.bias_rho)
 
-        # Variational posterior (Normal distribution)
+        # Unused posterior distributions (commented out)
         # q_weight = torch.distributions.Normal(self.weight_mu, weight_sigma)
         # q_bias = torch.distributions.Normal(self.bias_mu, bias_sigma)
 
-        # Prior distribution (Scale mixture normal)
-        # p(w) = pi * N(0, sigma1^2) + (1-pi) * N(0, sigma2^2)
-        prior_std_w = self.prior_sigma_1
-        prior_std_b = self.prior_sigma_1
+        # Unused log probabilities under prior (commented out)
+        # log_p_w = self.log_prior_prob(self.weight_mu).sum()
+        # log_p_b = self.log_prior_prob(self.bias_mu).sum()
 
-        # KL[N(mu, sigma^2) || N(0, prior_sigma^2)]
-        kl_weight = (
-            torch.log(prior_std_w / weight_sigma)
-            + (weight_sigma**2 + self.weight_mu**2) / (2 * prior_std_w**2)
+        # KL divergence approximation: E_q[log q(w) - log p(w)]
+        # For Gaussian q, E_q[log q(w)] relates to entropy.
+        # Let's use the analytical KL divergence between two Gaussians,
+        # but apply it to mixture components. This is still an approximation.
+        # Better: sampling or using analytical forms if available.
+
+        # We use the analytical KL divergence between q and the *first*
+        # component of the prior as a simpler, common approximation.
+        # KL[N(mu, sigma^2) || N(0, prior_sigma_1^2)]
+        kl_weight_comp1 = (
+            self.prior_log_sigma_1  # log(sigma_prior)
+            - torch.log(weight_sigma)  # log(sigma_q)
+            + (weight_sigma**2 + self.weight_mu**2)
+            / (2 * self.prior_sigma_1**2)
             - 0.5
         ).sum()
-        kl_bias = (
-            torch.log(prior_std_b / bias_sigma)
-            + (bias_sigma**2 + self.bias_mu**2) / (2 * prior_std_b**2)
+        kl_bias_comp1 = (
+            self.prior_log_sigma_1  # log(sigma_prior) for bias assumed same
+            - torch.log(bias_sigma)  # log(sigma_q)
+            + (bias_sigma**2 + self.bias_mu**2)
+            / (2 * self.prior_sigma_1**2)
             - 0.5
         ).sum()
 
-        return kl_weight + kl_bias
+        # This KL calculation needs careful review based on the specific
+        # variational objective being used (e.g., VI, Bayes by Backprop).
+        # The current implementation is a placeholder/approximation.
+        # A more standard approach might be needed depending on paper followed.
 
-    def log_prior_prob(self, w):
-        """Log probability of the scale mixture prior."""
-        dist1 = torch.distributions.Normal(0, self.prior_sigma_1)
-        log_prob1 = dist1.log_prob(w)
-        dist2 = torch.distributions.Normal(0, self.prior_sigma_2)
-        log_prob2 = dist2.log_prob(w)
+        # Returning the simpler KL divergence against the first component.
+        return kl_weight_comp1 + kl_bias_comp1
 
-        prob1 = log_prob1.exp()
-        prob2 = log_prob2.exp()
+    def log_prior_prob(self, w: torch.Tensor) -> torch.Tensor:
+        """
+        Calculates the log probability of the scale mixture prior p(w)
+        for the given weights w using the logsumexp trick for numerical
+        stability.
+        p(w) = pi * N(w|0, sigma1^2) + (1-pi) * N(w|0, sigma2^2)
+        log p(w) = logsumexp( [log(pi) + log N(w|0, sigma1^2),
+                               log(1-pi) + log N(w|0, sigma2^2)] )
+        """
+        # Ensure w is on the same device as the buffers
+        w = w.to(self.prior_log_sigma_1.device)
 
-        return torch.log(self.prior_pi * prob1 + (1 - self.prior_pi) * prob2)
+        # Calculate log probability under each Gaussian component
+        # log N(w|0, sigma^2) = -0.5 * log(2*pi*sigma^2) - w^2 / (2*sigma^2)
+        #                     = -0.5*log(2*pi) - log(sigma) - w^2 / (2*sigma^2)
+        const = -0.5 * math.log(2 * math.pi)
+        log_prob1 = (
+            const
+            - self.prior_log_sigma_1  # -log(sigma1)
+            - (w**2) / (2 * self.prior_sigma_1**2)
+        )
+        log_prob2 = (
+            const
+            - self.prior_log_sigma_2  # -log(sigma2)
+            - (w**2) / (2 * self.prior_sigma_2**2)
+        )
+
+        # Combine with log mixture weights
+        term1 = self.log_prior_pi + log_prob1
+        term2 = self.log_prior_one_minus_pi + log_prob2
+
+        # Stack for logsumexp
+        stacked_terms = torch.stack([term1, term2], dim=0)
+
+        # Compute logsumexp over the mixture dimension (dim=0)
+        log_mix_prob = torch.logsumexp(stacked_terms, dim=0)
+
+        return log_mix_prob

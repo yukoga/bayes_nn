@@ -89,17 +89,13 @@ def plot_observed_vs_predicted(
         ylabel (str): Label for the Y-axis.
         figsize (tuple): Figure size.
     """
-    fig, ax = plt.subplots(figsize=figsize)  # Use fig, ax
+    fig, ax = plt.subplots(figsize=figsize)
 
     # Scatter plot of observed vs. predicted mean
     ax.scatter(y_true, y_pred_mean, alpha=0.6, label="Predicted Mean")
 
-    # Calculate 95% confidence interval bounds (mean +/- 1.96 * std)
-    lower_bound = y_pred_mean - 1.96 * y_pred_std
-    upper_bound = y_pred_mean + 1.96 * y_pred_std
-
     # Plot the 95% confidence interval using error bars.
-    plt.errorbar(
+    ax.errorbar(
         y_true,
         y_pred_mean,
         yerr=1.96 * y_pred_std,
@@ -111,10 +107,11 @@ def plot_observed_vs_predicted(
         label="95% Confidence Interval",
     )
 
-    # Plot the y=x line (Ideal prediction)
-    min_val = min(np.min(y_true), np.min(y_pred_mean - 2 * y_pred_std))
-    max_val = max(np.max(y_true), np.max(y_pred_mean + 2 * y_pred_std))
-    # Add some padding to the limits
+    # Plot the ideal prediction line
+    # Determine plot limits based on data range
+    min_val_data = min(np.min(y_true), np.min(y_pred_mean - 2 * y_pred_std))
+    max_val_data = max(np.max(y_true), np.max(y_pred_mean + 2 * y_pred_std))
+    # Add some padding to the limits using min/max based on data
     padding = (max_val_data - min_val_data) * 0.05
     min_val_plot = min_val_data - padding
     max_val_plot = max_val_data + padding
@@ -123,16 +120,32 @@ def plot_observed_vs_predicted(
         [min_val_plot, max_val_plot],
         [min_val_plot, max_val_plot],
         "r--",
-        label="Ideal prediction line (y_observed = y_predicted)",
+        label="Ideal Prediction",
     )
 
-    plt.title(title)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.legend(loc='best')
-    plt.grid(True)
-    plt.xlim(min_val, max_val)
-    plt.ylim(min_val, max_val)
-    plt.gca().set_aspect('equal', adjustable='box')
+    # Calculate metrics
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred_mean))
+    mae = mean_absolute_error(y_true, y_pred_mean)
+    metrics_text = f"RMSE: {rmse:.4f}\nMAE:  {mae:.4f}"
+
+    # Add metrics text to the plot (top-left corner)
+    ax.text(
+        0.05,  # x-coordinate (5% from left)
+        0.95,  # y-coordinate (95% from bottom)
+        metrics_text,
+        transform=ax.transAxes,
+        fontsize=9,
+        verticalalignment="top",
+        bbox=dict(boxstyle="round,pad=0.3", fc="wheat", alpha=0.5),
+    )
+
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.legend(loc='lower right')
+    ax.grid(True)
+    ax.set_xlim(min_val_plot, max_val_plot)
+    ax.set_ylim(min_val_plot, max_val_plot)
+    ax.set_aspect('equal', adjustable='box')
     plt.tight_layout()
     plt.show()

@@ -35,7 +35,7 @@ except ImportError:
 
 def generate_poisson_data(
     n_samples: int = 200,
-    true_a: float = 2.5,
+    true_a: float = 1.5,
     true_b: float = 0.5,
     random_state: int = 123,
 ):
@@ -45,10 +45,7 @@ def generate_poisson_data(
     log_lambda = true_a * X + true_b
     lambda_ = np.exp(log_lambda)
     y = np.random.poisson(lambda_, size=(n_samples, 1))
-    print(
-        f"Generated data: y ~ Poisson(lambda), "
-        f"log(lambda) = {true_a}*x + {true_b}"
-    )
+    print(f"Generated data: y ~ Poisson(lambda), log(lambda) = {true_a}*x + {true_b}")
     return X, y.flatten()
 
 
@@ -75,40 +72,44 @@ def plot_predictions_poisson(
     y_samples = y_samples.squeeze(-1)  # (n_samples_plot, num_pred_points)
 
     # Mean and std dev of predictions (mean/std dev of predicted counts)
-    # y_mean = y_samples.mean(axis=0) # Unused variable removed
-    # y_std = y_samples.std(axis=0) # Unused variable removed
+    y_mean = y_samples.mean(axis=0)
+    # Std represents uncertainty in the expected count
+    y_std = y_samples.std(axis=0)
 
-    # Mean rate and std dev calculated by predict method (stats of lambda)
-    lambda_pred_mean, lambda_pred_std = model.predict(
-        X_pred_points, return_std=True
-    )
+    # (Optional) Mean rate calculated by predict method (stats of lambda)
+    # lambda_pred_mean, _ = model.predict(X_pred_points, return_std=True)
 
-    # Plot the predictive mean rate (lambda)
+    # Plot the predictive mean count E[y]
     plt.plot(
         X_pred_points.flatten(),
-        lambda_pred_mean,
+        y_mean,
         "r-",
-        label="Predictive Mean Rate (λ)",
+        label="Predictive Mean Count E[y]",
     )
 
-    # Plot confidence interval for predictive rate (e.g., mean ± 2*std dev)
+    # Plot confidence interval for predictive count (e.g., mean ± 2*std dev)
+    # This interval reflects the uncertainty about the expected count value
+    # due to model parameter uncertainty (epistemic).
     plt.fill_between(
         X_pred_points.flatten(),
-        lambda_pred_mean - 2 * lambda_pred_std,
-        lambda_pred_mean + 2 * lambda_pred_std,
+        y_mean - 2 * y_std,
+        y_mean + 2 * y_std,
         color="r",
         alpha=0.2,
-        label="Predictive Rate Uncertainty (λ ± 2*Std[λ])",
+        label="Predictive Count Uncertainty (E[y] ± 2*Std[E[y]])",
     )
 
-    # (Reference) Plot mean and standard deviation of predicted counts
-    # plt.plot(X_pred_points.flatten(), y_mean, 'g--',
-    #          label='Mean Predicted Count E[y]')
+    # (Optional Plotting of Lambda for reference)
+    # plt.plot(X_pred_points.flatten(), lambda_pred_mean, 'g--',
+    #          label='Mean Predicted Rate (λ)')
+    # lambda_pred_mean, lambda_pred_std = model.predict(
+    #     X_pred_points, return_std=True
+    # )
     # plt.fill_between(X_pred_points.flatten(),
-    #                  y_mean - 2 * y_std,
-    #                  y_mean + 2 * y_std,
+    #                  lambda_pred_mean - 2 * lambda_pred_std,
+    #                  lambda_pred_mean + 2 * lambda_pred_std,
     #                  color='g', alpha=0.1,
-    #                  label='Predicted Count Uncertainty (E[y] ± 2*Std[y])')
+    #                  label='Predictive Rate Uncertainty (λ ± 2*Std[λ])')
 
     plt.xlabel("Input Feature (X)")
     plt.ylabel("Target Value (y - Counts)")
@@ -154,9 +155,7 @@ if __name__ == "__main__":
 
     # --- 4. Plotting Training Results ---
     # Break plot_loss_history call
-    bnn_regressor.plot_loss_history(
-        title="Poisson BNN: Training and Validation Loss"
-    )
+    bnn_regressor.plot_loss_history(title="Poisson BNN: Training and Validation Loss")
     # Break plot_predictions_poisson call
     plot_predictions_poisson(
         X_train,
@@ -165,36 +164,43 @@ if __name__ == "__main__":
         title="Bayesian Regression (Poisson Output)",
     )
 
-    # Plot observed counts vs predicted rate for training data
-    lambda_pred_mean_train, lambda_pred_std_train = bnn_regressor.predict(
-        X_train, return_std=True
+    # Plot observed counts vs predicted counts for training data
+    # Get samples of predicted counts for training data
+    y_samples_train = bnn_regressor.predict_proba(
+        X_train, n_samples=bnn_regressor.n_samples_predict
     )
+    # y_samples_train shape: (n_samples, n_train_points)
+    y_samples_train = y_samples_train.squeeze(-1)
+
+    # Calculate mean and std dev of predicted counts
+    y_pred_mean_train = y_samples_train.mean(axis=0)
+    y_pred_std_train = y_samples_train.std(axis=0)
+
     plot_observed_vs_predicted(
         y_train,  # Observed counts
-        lambda_pred_mean_train,  # Predicted rate (mean)
-        lambda_pred_std_train,  # Predicted rate (std dev)
-        title="Poisson BNN: Observed vs. Predicted Rate (Train)",
+        y_pred_mean_train,  # Predicted mean count E[y]
+        y_pred_std_train,  # Std dev of predicted mean count Std[E[y]]
+        title="Poisson BNN: Observed vs. Predicted Counts (Train)",
         xlabel="Observed Counts",
-        ylabel="Predicted Rate (λ)",
+        ylabel="Predicted Mean Count E[y]",
     )
 
     # --- 5. Prediction on New Data (Example) ---
     X_new = np.array([[-1.5], [0.0], [1.5]])
-    # Break predict call
-    lambda_pred_mean, lambda_pred_std = bnn_regressor.predict(
-        X_new, return_std=True
-    )
+    # Get predicted rate (lambda) stats for new data
+    lambda_pred_mean, lambda_pred_std = bnn_regressor.predict(X_new, return_std=True)
 
-    print("\nPredictions for new data points:")
+    print("\nPredictions for new data points (Rate λ):")
     for i in range(X_new.shape[0]):
-        # Break print line
         print(
             f"Input: {X_new[i, 0]:.2f}, "
             f"Predicted Mean Rate (λ): {lambda_pred_mean[i]:.2f}, "
-            f"Predicted Rate Std: {lambda_pred_std[i]:.2f}"
+            f"Predicted Rate Std (λ): {lambda_pred_std[i]:.2f}"
         )
 
-    # Get samples from the predictive distribution
-    y_samples_new = bnn_regressor.predict_proba(X_new, n_samples=5)
+    # Get samples from the predictive distribution (counts) for new data
+    y_samples_new = bnn_regressor.predict_proba(
+        X_new, n_samples=bnn_regressor.n_samples_predict
+    )
     print("\nSamples from predictive distribution (counts) for new data:")
     print(y_samples_new)  # shape: (5, 3, 1)

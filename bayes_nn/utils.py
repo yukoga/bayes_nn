@@ -43,12 +43,10 @@ def plot_loss_history(
     plt.plot(epochs, history["train_loss"], "bo-", label="Training loss")
 
     if "val_loss" in history and len(history["val_loss"]) > 0:
-        # Match the number of epochs for which val_loss is recorded.
         val_epochs = range(1, len(history["val_loss"]) + 1)
         plt.plot(
             val_epochs, history["val_loss"], "ro-", label="Validation loss"
         )
-        # Mark the point with the minimum validation loss (optional).
         if len(history["val_loss"]) > 0:
             best_val_epoch = np.argmin(history["val_loss"])
             best_val = history["val_loss"][best_val_epoch]
@@ -91,14 +89,10 @@ def plot_observed_vs_predicted(
         ylabel (str): Label for the Y-axis.
         figsize (tuple): Figure size.
     """
-    fig, ax = plt.subplots(figsize=figsize)  # Use fig, ax
+    fig, ax = plt.subplots(figsize=figsize)
 
     # Scatter plot of observed vs. predicted mean
     ax.scatter(y_true, y_pred_mean, alpha=0.6, label="Predicted Mean")
-
-    # Calculate 95% confidence interval bounds (mean +/- 1.96 * std)
-    # lower_bound = y_pred_mean - 1.96 * y_pred_std # Unused
-    # upper_bound = y_pred_mean + 1.96 * y_pred_std # Unused
 
     # Plot the 95% confidence interval using error bars.
     ax.errorbar(
@@ -113,10 +107,11 @@ def plot_observed_vs_predicted(
         label="95% Confidence Interval",
     )
 
-    # Plot the y=x line (perfect prediction)
+    # Plot the ideal prediction line
+    # Determine plot limits based on data range
     min_val_data = min(np.min(y_true), np.min(y_pred_mean - 2 * y_pred_std))
     max_val_data = max(np.max(y_true), np.max(y_pred_mean + 2 * y_pred_std))
-    # Add some padding to the limits
+    # Add some padding to the limits using min/max based on data
     padding = (max_val_data - min_val_data) * 0.05
     min_val_plot = min_val_data - padding
     max_val_plot = max_val_data + padding
@@ -125,7 +120,7 @@ def plot_observed_vs_predicted(
         [min_val_plot, max_val_plot],
         [min_val_plot, max_val_plot],
         "r--",
-        label="y = x (Perfect Prediction)",
+        label="Ideal Prediction",
     )
 
     # Calculate metrics
@@ -134,10 +129,9 @@ def plot_observed_vs_predicted(
     metrics_text = f"RMSE: {rmse:.4f}\nMAE:  {mae:.4f}"
 
     # Add metrics text to the plot (top-left corner)
-    # Adjust x, y coordinates and ha/va as needed for placement
     ax.text(
-        0.05,
-        0.95,
+        0.05,  # x-coordinate (5% from left)
+        0.95,  # y-coordinate (95% from bottom)
         metrics_text,
         transform=ax.transAxes,
         fontsize=9,
@@ -148,12 +142,10 @@ def plot_observed_vs_predicted(
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    # Adjust legend placement (lower right)
-    ax.legend(loc="lower right")
+    ax.legend(loc='lower right')
     ax.grid(True)
-    # Set limits based on data range for better visualization
     ax.set_xlim(min_val_plot, max_val_plot)
     ax.set_ylim(min_val_plot, max_val_plot)
-    ax.set_aspect("equal", adjustable="box")  # Equal aspect ratio
+    ax.set_aspect('equal', adjustable='box')
     plt.tight_layout()
     plt.show()

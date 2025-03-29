@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bayes_nn"
+version = "0.1.0"
+authors = [
+    { name="Yutaka Koga", email="yukoga@gmail.com" },
+]
+description = "A simple Bayesian Neural Network library using PyTorch"
+readme = "README.md"
+requires-python = ">=3.8"
+# License set based on setup.cfg (Apache-2.0)
+license = { text="Apache-2.0" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License", # Updated based on setup.cfg
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "numpy>=1.20.0",
+    "pandas>=1.3.0", # Assuming pandas is still needed
+    "matplotlib>=3.4.0",
+    "torch>=1.9.0",
+    "tqdm>=4.67.1",
+    "scikit-learn>=0.24", # Added dependency
+]
+
+[project.urls]
+Homepage = "https://github.com/yukoga/bayes_nn"
+# Repository = "https://github.com/yukoga/bayes_nn" # Optional: Add repo URL
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "flake8", # Added linter
+    "mypy",   # Added type checker
+    "data-science-types", # For sklearn stubs
+]
+
+# Keep uv section if used specifically for dev deps management via uv
+# Note: Dependencies listed here are redundant if also in [project.optional-dependencies]
+# Consider using only [project.optional-dependencies] for broader compatibility
+# e.g., pip install -e .[dev]
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.3.5", # From original file
+    "flake8",
+    "mypy",
+    "data-science-types",
+]
+
+# Replicate package finding logic from setup.cfg
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests*", "examples*"]
+
+# Pytest config can be kept here or moved to pytest.ini or kept in setup.cfg if preferred
+# [tool.pytest.ini_options]
+# minversion = "6.0"
+# addopts = "-ra -q"
+# testpaths = [
+#     "tests",
+# ]

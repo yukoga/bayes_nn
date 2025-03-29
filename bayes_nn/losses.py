@@ -87,9 +87,6 @@ class ELBO(nn.Module):
         return loss
 
 
-# --- Loss functions for likelihood calculation ---
-
-
 class GaussianNLLLoss(nn.Module):
     """
     Negative Log Likelihood loss for Gaussian distribution.
@@ -167,4 +164,4 @@ class PoissonNLLLoss(nn.Module):
         # log(y!) is calculated using torch.lgamma(y + 1)
         nll = lambda_ - y_true * log_lambda + torch.lgamma(y_true + 1)
 
-        return nll.mean()  # Take the batch mean
+        return nll.mean()

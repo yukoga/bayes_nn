@@ -412,9 +412,7 @@ class BayesianRegressor(BaseEstimator):
                 # Weights are sampled each time the model is passed through
                 output = self.model(X_tensor)
                 predictions_list.append(output.cpu().numpy())
-        predictions_np = np.array(
-            predictions_list
-        )
+        predictions_np = np.array(predictions_list)
 
         mean_pred: np.ndarray
         std_pred: np.ndarray
@@ -431,12 +429,8 @@ class BayesianRegressor(BaseEstimator):
                 # Standard deviation of prediction: considers uncertainty
                 # Var[y] = E[Var[y|w]] + Var[E[y|w]]
                 #        = E[sigma^2] + Var[mu]
-                epistemic_uncertainty = mus.var(
-                    axis=0
-                )
-                aleatoric_uncertainty = (sigmas**2).mean(
-                    axis=0
-                )
+                epistemic_uncertainty = mus.var(axis=0)
+                aleatoric_uncertainty = (sigmas**2).mean(axis=0)
                 total_variance = epistemic_uncertainty + aleatoric_uncertainty
                 std_pred = np.sqrt(total_variance)
                 return mean_pred, std_pred
@@ -488,9 +482,7 @@ class BayesianRegressor(BaseEstimator):
         sampled_outputs_list: List[np.ndarray] = []
         with torch.no_grad():
             for _ in range(n_samples_eff):
-                output = (
-                    self.model(X_tensor).cpu().numpy()
-                )
+                output = self.model(X_tensor).cpu().numpy()
 
                 y_sample: np.ndarray
                 if self.output_type == "gaussian":
@@ -499,18 +491,14 @@ class BayesianRegressor(BaseEstimator):
                     sigmas = np.sqrt(np.exp(log_vars))
                     # Sample from N(mu, sigma^2) for each data point
                     y_sample = np.random.normal(mus, sigmas)
-                    sampled_outputs_list.append(
-                        y_sample[:, np.newaxis]
-                    )
+                    sampled_outputs_list.append(y_sample[:, np.newaxis])
 
                 elif self.output_type == "poisson":
                     log_lambdas = output[:, 0]
                     lambdas = np.exp(log_lambdas)
                     # Sample from Poisson(lambda) for each data point
                     y_sample = np.random.poisson(lambdas)
-                    sampled_outputs_list.append(
-                        y_sample[:, np.newaxis]
-                    )
+                    sampled_outputs_list.append(y_sample[:, np.newaxis])
         # sampled_outputs_list contains arrays of shape (num_data, 1)
         return np.array(sampled_outputs_list)
 

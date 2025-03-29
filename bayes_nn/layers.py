@@ -156,44 +156,19 @@ class BayesianLinear(nn.Module):
         weight_sigma = F.softplus(self.weight_rho)
         bias_sigma = F.softplus(self.bias_rho)
 
-        # Unused posterior distributions (commented out)
-        # q_weight = torch.distributions.Normal(self.weight_mu, weight_sigma)
-        # q_bias = torch.distributions.Normal(self.bias_mu, bias_sigma)
-
-        # Unused log probabilities under prior (commented out)
-        # log_p_w = self.log_prior_prob(self.weight_mu).sum()
-        # log_p_b = self.log_prior_prob(self.bias_mu).sum()
-
-        # KL divergence approximation: E_q[log q(w) - log p(w)]
-        # For Gaussian q, E_q[log q(w)] relates to entropy.
-        # Let's use the analytical KL divergence between two Gaussians,
-        # but apply it to mixture components. This is still an approximation.
-        # Better: sampling or using analytical forms if available.
-
-        # We use the analytical KL divergence between q and the *first*
-        # component of the prior as a simpler, common approximation.
-        # KL[N(mu, sigma^2) || N(0, prior_sigma_1^2)]
         kl_weight_comp1 = (
-            self.prior_log_sigma_1  # log(sigma_prior)
-            - torch.log(weight_sigma)  # log(sigma_q)
-            + (weight_sigma**2 + self.weight_mu**2)
-            / (2 * self.prior_sigma_1**2)
+            self.prior_log_sigma_1
+            - torch.log(weight_sigma)
+            + (weight_sigma**2 + self.weight_mu**2) / (2 * self.prior_sigma_1**2)
             - 0.5
         ).sum()
         kl_bias_comp1 = (
-            self.prior_log_sigma_1  # log(sigma_prior) for bias assumed same
-            - torch.log(bias_sigma)  # log(sigma_q)
-            + (bias_sigma**2 + self.bias_mu**2)
-            / (2 * self.prior_sigma_1**2)
+            self.prior_log_sigma_1
+            - torch.log(bias_sigma)
+            + (bias_sigma**2 + self.bias_mu**2) / (2 * self.prior_sigma_1**2)
             - 0.5
         ).sum()
 
-        # This KL calculation needs careful review based on the specific
-        # variational objective being used (e.g., VI, Bayes by Backprop).
-        # The current implementation is a placeholder/approximation.
-        # A more standard approach might be needed depending on paper followed.
-
-        # Returning the simpler KL divergence against the first component.
         return kl_weight_comp1 + kl_bias_comp1
 
     def log_prior_prob(self, w: torch.Tensor) -> torch.Tensor:
@@ -213,14 +188,10 @@ class BayesianLinear(nn.Module):
         #                     = -0.5*log(2*pi) - log(sigma) - w^2 / (2*sigma^2)
         const = -0.5 * math.log(2 * math.pi)
         log_prob1 = (
-            const
-            - self.prior_log_sigma_1  # -log(sigma1)
-            - (w**2) / (2 * self.prior_sigma_1**2)
+            const - self.prior_log_sigma_1 - (w**2) / (2 * self.prior_sigma_1**2)
         )
         log_prob2 = (
-            const
-            - self.prior_log_sigma_2  # -log(sigma2)
-            - (w**2) / (2 * self.prior_sigma_2**2)
+            const - self.prior_log_sigma_2 - (w**2) / (2 * self.prior_sigma_2**2)
         )
 
         # Combine with log mixture weights

@@ -124,24 +124,15 @@ class BayesianLinear(nn.Module):
         bias_sigma = F.softplus(self.bias_rho)
 
         # Variational posterior (Normal distribution)
-        # - Variables removed as unused
         # q_weight = torch.distributions.Normal(self.weight_mu, weight_sigma)
         # q_bias = torch.distributions.Normal(self.bias_mu, bias_sigma)
 
         # Prior distribution (Scale mixture normal)
         # p(w) = pi * N(0, sigma1^2) + (1-pi) * N(0, sigma2^2)
-        # Calculating KL divergence analytically is difficult.
-        # Monte Carlo approximation or, for simplicity, approximate using
-        # a simple Normal prior N(0, prior_sigma_1^2).
-        # (More accurately, closed-form approximations proposed in papers
-        # should be used)
-        # Here, for simplicity, use N(0, prior_sigma_1^2) as the prior.
         prior_std_w = self.prior_sigma_1
         prior_std_b = self.prior_sigma_1
 
         # KL[N(mu, sigma^2) || N(0, prior_sigma^2)]
-        # = log(prior_sigma / sigma)
-        #   + (sigma^2 + mu^2) / (2 * prior_sigma^2) - 0.5
         kl_weight = (
             torch.log(prior_std_w / weight_sigma)
             + (weight_sigma**2 + self.weight_mu**2) / (2 * prior_std_w**2)
@@ -153,23 +144,6 @@ class BayesianLinear(nn.Module):
             - 0.5
         ).sum()
 
-        # Simple implementation: KL divergence assuming prior is N(0, 1)
-        # kl_weight = -0.5 * torch.sum(
-        #     1 + 2 * torch.log(weight_sigma)
-        #     - self.weight_mu.pow(2) - weight_sigma.pow(2)
-        # )
-        # kl_bias = -0.5 * torch.sum(
-        #     1 + 2 * torch.log(bias_sigma)
-        #     - self.bias_mu.pow(2) - bias_sigma.pow(2)
-        # )
-
-        # More accurate KL divergence for scale mixture prior
-        # (often uses approximations)
-        # log_prior = self.log_prior_prob(weight) + self.log_prior_prob(bias)
-        # log_q = q_weight.log_prob(weight).sum() + q_bias.log_prob(bias).sum()
-        # kl_div = (log_q - log_prior).mean() # Monte Carlo approximation
-
-        # Using the N(0, prior_sigma_1^2) approximation here
         return kl_weight + kl_bias
 
     def log_prior_prob(self, w):

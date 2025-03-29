@@ -42,12 +42,10 @@ def plot_loss_history(
     plt.plot(epochs, history["train_loss"], "bo-", label="Training loss")
 
     if "val_loss" in history and len(history["val_loss"]) > 0:
-        # Match the number of epochs for which val_loss is recorded.
         val_epochs = range(1, len(history["val_loss"]) + 1)
         plt.plot(
             val_epochs, history["val_loss"], "ro-", label="Validation loss"
         )
-        # Mark the point with the minimum validation loss (optional).
         if len(history["val_loss"]) > 0:
             best_val_epoch = np.argmin(history["val_loss"])
             best_val = history["val_loss"][best_val_epoch]
@@ -98,28 +96,7 @@ def plot_observed_vs_predicted(
     lower_bound = y_pred_mean - 1.96 * y_pred_std
     upper_bound = y_pred_mean + 1.96 * y_pred_std
 
-    # Sort values based on y_true for proper fill_between plotting
-    # This helps visualize the trend if there's correlation, but the primary
-    # goal is to show prediction accuracy per point.
-    # For clarity, we plot error bars instead of a continuous band
-    # against y_true.
-    # plt.errorbar(
-    #     y_true, y_pred_mean, yerr=1.96 * y_pred_std, fmt='o', alpha=0.6,
-    #     ecolor='skyblue', capsize=0, label='Predicted Mean +/- 95% CI'
-    # )
-
-    # Alternative: Plot confidence interval band based on sorted
-    # predicted means. This shows the range of predictions across the
-    # observed values. (Unused variables commented out)
-    # sort_indices_pred = np.argsort(y_pred_mean)
-    # y_true_sorted_by_pred = y_true[sort_indices_pred]
-    # y_pred_mean_sorted = y_pred_mean[sort_indices_pred]
-    # lower_bound_sorted_by_pred = lower_bound[sort_indices_pred]
-    # upper_bound_sorted_by_pred = upper_bound[sort_indices_pred]
-
     # Plot the 95% confidence interval using error bars.
-    # This shows the uncertainty for each individual prediction point
-    # against its corresponding true value.
     plt.errorbar(
         y_true,
         y_pred_mean,
@@ -132,7 +109,7 @@ def plot_observed_vs_predicted(
         label="95% Confidence Interval",
     )
 
-    # Plot the y=x line (perfect prediction)
+    # Plot the y=x line (Ideal prediction)
     min_val = min(np.min(y_true), np.min(y_pred_mean - 2 * y_pred_std))
     max_val = max(np.max(y_true), np.max(y_pred_mean + 2 * y_pred_std))
     # Add some padding to the limits
@@ -150,12 +127,10 @@ def plot_observed_vs_predicted(
     plt.title(title)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
-    # Adjust legend placement if needed
     plt.legend(loc='best')
     plt.grid(True)
-    # Set limits based on data range for better visualization
     plt.xlim(min_val, max_val)
     plt.ylim(min_val, max_val)
-    plt.gca().set_aspect('equal', adjustable='box')  # Equal aspect ratio
+    plt.gca().set_aspect('equal', adjustable='box')
     plt.tight_layout()
     plt.show()

@@ -64,10 +64,10 @@ class ELBO(nn.Module):
         Returns:
             torch.Tensor: Calculated ELBO loss (scalar value).
         """
-        # 1. Negative Log Likelihood term
+        # Negative Log Likelihood term
         nll_loss = self.nll_loss_fn(y_pred, y_true)
 
-        # 2. KL Divergence term
+        # KL Divergence term
         # Sum KL divergences from all BayesianLinear layers in the model
         kl_div = torch.tensor(
             0.0, device=y_pred.device
@@ -77,12 +77,11 @@ class ELBO(nn.Module):
                 kl_div += module.kl_divergence()
 
         # Scale KL divergence by dataset size
-        # (Often done to reduce variance of gradients in mini-batch learning)
         # beta * KL / N (beta = kl_weight)
         scaled_kl_div = self.kl_weight * kl_div / self.dataset_size
         # scaled_kl_div = self.kl_weight * kl_div # If not scaling
 
-        # 3. ELBO loss (-ELBO) = NLL + scaled_KL
+        # ELBO loss (-ELBO) = NLL + scaled_KL
         loss = nll_loss + scaled_kl_div
 
         return loss
@@ -112,7 +111,6 @@ class GaussianNLLLoss(nn.Module):
             torch.Tensor: Mean NLL loss over the batch (scalar value).
         """
         if y_pred.shape[1] != 2:
-            # Break the error string into two parts
             error_msg = (
                 "GaussianNLLLoss expects y_pred to have 2 columns (mu, log_var)."
             )
@@ -128,9 +126,6 @@ class GaussianNLLLoss(nn.Module):
         term1 = torch.log(2 * torch.pi * var)
         term2 = ((y_true - mu) / sigma) ** 2
         nll = 0.5 * (term1 + term2)
-        # nll = 0.5 * (
-        #     math.log(2 * math.pi) + log_var + (y_true - mu)**2 / var
-        # ) # Same result
 
         return nll.mean()  # Take the batch mean
 

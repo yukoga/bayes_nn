@@ -19,12 +19,11 @@ import torch.optim as optim
 
 # Import Generator from torch
 from torch.utils.data import DataLoader, TensorDataset, random_split, Dataset
-from torch import Tensor, Generator  # Correct import location
+from torch import Tensor, Generator
 import numpy as np
 import pandas as pd
 from typing import List, Dict, Any, Optional, Tuple, Type, Union
 
-# import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
 
 from .base import BaseEstimator
@@ -143,21 +142,20 @@ class BayesianRegressor(BaseEstimator):
         self.optimizer_cls = optimizer_cls
         self.validation_split = validation_split
         self.early_stopping_patience = early_stopping_patience
-        self.random_state = random_state  # Used for DataLoader shuffle, etc.
+        self.random_state = random_state
 
-        # Device setting
         if device == "auto":
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(device)
 
         # Determine output dimension and NLL loss function
-        self.nll_loss_fn: nn.Module  # Type hint for mypy
+        self.nll_loss_fn: nn.Module
         if self.output_type == "gaussian":
-            self.output_dim = 2  # Mean and log variance
+            self.output_dim = 2
             self.nll_loss_fn = GaussianNLLLoss()
         elif self.output_type == "poisson":
-            self.output_dim = 1  # Log rate
+            self.output_dim = 1
             self.nll_loss_fn = PoissonNLLLoss()
         else:
             raise ValueError("output_type must be 'gaussian' or 'poisson'")
@@ -176,14 +174,14 @@ class BayesianRegressor(BaseEstimator):
         self.best_val_loss = float("inf")
         self.epochs_no_improve = 0
         self.best_model_state: Optional[Dict[str, Any]] = None
-        self.elbo_loss_fn: Optional[ELBO] = None  # Initialize later
+        self.elbo_loss_fn: Optional[ELBO] = None
 
     def fit(
         self,
         X: Union[np.ndarray, pd.DataFrame],
         y: Union[np.ndarray, pd.Series],
         verbose: bool = True,
-        **kwargs: Any,  # To match BaseEstimator signature
+        **kwargs: Any,
     ) -> "BayesianRegressor":
         """
         Fits the model to the data.
@@ -229,7 +227,7 @@ class BayesianRegressor(BaseEstimator):
             ):  # Ensure val_size is at least 1 if possible
                 val_size = 1
             train_size = dataset_size - val_size
-            if train_size == 0:  # Ensure train_size is at least 1
+            if train_size == 0:
                 train_size = 1
                 val_size = dataset_size - 1
 
@@ -257,7 +255,6 @@ class BayesianRegressor(BaseEstimator):
                     f"{val_size} samples."
                 )
         else:
-            # Use full dataset for training if split is 0 or dataset too small
             train_dataset = dataset
             train_loader = DataLoader(
                 train_dataset,
@@ -280,32 +277,22 @@ class BayesianRegressor(BaseEstimator):
         # --- Training loop ---
         progress_bar = tqdm(range(self.n_epochs), desc="Epochs", disable=not verbose)
         for epoch in progress_bar:
-            self.model.train()  # Training mode
+            self.model.train()
             train_loss_epoch = 0.0
             batch_count = 0
             for batch_X, batch_y in train_loader:
                 batch_X = batch_X.to(self.device)
                 batch_y = batch_y.to(self.device)
                 batch_count += 1
-
-                # Zero gradients
                 self.optimizer.zero_grad()
-
-                # Forward pass
                 y_pred = self.model(batch_X)
 
                 # Calculate loss (ELBO)
-                # Add assertion for mypy
                 assert self.elbo_loss_fn is not None
                 loss = self.elbo_loss_fn(y_pred, batch_y)
-
-                # Backward pass
                 loss.backward()
-
-                # Update parameters
                 self.optimizer.step()
-
-                train_loss_epoch += loss.item()  # Sum losses
+                train_loss_epoch += loss.item()
 
             # Calculate average loss for the epoch, cast divisor to float
             avg_train_loss = (
@@ -314,19 +301,18 @@ class BayesianRegressor(BaseEstimator):
             self.history["train_loss"].append(avg_train_loss)
 
             # --- Validation ---
-            avg_val_loss = float("nan")  # Default if no validation
+            avg_val_loss = float("nan")
             if val_loader:
-                self.model.eval()  # Evaluation mode
+                self.model.eval()
                 val_loss_epoch = 0.0
                 val_batch_count = 0
-                with torch.no_grad():  # Disable gradient calculation
+                with torch.no_grad():
                     for batch_X_val, batch_y_val in val_loader:
                         batch_X_val = batch_X_val.to(self.device)
                         batch_y_val = batch_y_val.to(self.device)
                         val_batch_count += 1
 
                         y_pred_val = self.model(batch_X_val)
-                        # Add assertion for mypy
                         assert self.elbo_loss_fn is not None
                         val_loss = self.elbo_loss_fn(y_pred_val, batch_y_val)
                         val_loss_epoch += val_loss.item()  # Sum losses
@@ -365,12 +351,10 @@ class BayesianRegressor(BaseEstimator):
                             # Restore the best model state
                             if self.best_model_state:
                                 self.model.load_state_dict(self.best_model_state)
-                            break  # Exit training loop
+                            break
             else:
-                # No validation set
                 if verbose:
                     progress_bar.set_postfix({"Train Loss": f"{avg_train_loss:.4f}"})
-                # Cannot use early stopping, consider last model as best
                 self.best_model_state = self.model.state_dict()
 
         # After training, load the best model state (if early stopping was used)
@@ -393,7 +377,7 @@ class BayesianRegressor(BaseEstimator):
         X: Union[np.ndarray, pd.DataFrame],
         return_std: bool = False,
         n_samples: Optional[int] = None,
-        **kwargs: Any,  # To match BaseEstimator signature
+        **kwargs: Any,
     ) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
         """
         Makes predictions for new data points.
@@ -417,36 +401,31 @@ class BayesianRegressor(BaseEstimator):
                                     For Poisson regression, mean is E[lambda],
                                     std dev is Std[lambda].
         """
-        self.model.eval()  # Evaluation mode
+        self.model.eval()
         if isinstance(X, pd.DataFrame):
             X = X.values
         X_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
-
         n_samples_eff = n_samples if n_samples is not None else self.n_samples_predict
-
         predictions_list: List[np.ndarray] = []
         with torch.no_grad():
             for _ in range(n_samples_eff):
                 # Weights are sampled each time the model is passed through
                 output = self.model(X_tensor)
                 predictions_list.append(output.cpu().numpy())
-
-        # predictions_list contains arrays of shape (num_data, output_dim)
         predictions_np = np.array(
             predictions_list
-        )  # shape: (n_samples_eff, num_data, output_dim)
+        )
 
         mean_pred: np.ndarray
         std_pred: np.ndarray
 
         if self.output_type == "gaussian":
             # output_dim = 2 (mu, log_var)
-            mus = predictions_np[:, :, 0]  # shape: (n_samples_eff, num_data)
+            mus = predictions_np[:, :, 0]
             log_vars = predictions_np[:, :, 1]
             sigmas = np.sqrt(np.exp(log_vars))
-
             # Mean prediction = E[mu]
-            mean_pred = mus.mean(axis=0)  # shape: (num_data,)
+            mean_pred = mus.mean(axis=0)
 
             if return_std:
                 # Standard deviation of prediction: considers uncertainty
@@ -454,12 +433,12 @@ class BayesianRegressor(BaseEstimator):
                 #        = E[sigma^2] + Var[mu]
                 epistemic_uncertainty = mus.var(
                     axis=0
-                )  # Model (parameter) uncertainty Var[mu]
+                )
                 aleatoric_uncertainty = (sigmas**2).mean(
                     axis=0
-                )  # Data-inherent noise E[sigma^2]
+                )
                 total_variance = epistemic_uncertainty + aleatoric_uncertainty
-                std_pred = np.sqrt(total_variance)  # shape: (num_data,)
+                std_pred = np.sqrt(total_variance)
                 return mean_pred, std_pred
             else:
                 return mean_pred
@@ -467,14 +446,14 @@ class BayesianRegressor(BaseEstimator):
         elif self.output_type == "poisson":
             # output_dim = 1 (log_lambda)
             log_lambdas = predictions_np[:, :, 0]
-            lambdas = np.exp(log_lambdas)  # shape: (n_samples_eff, num_data)
+            lambdas = np.exp(log_lambdas)
 
             # Mean prediction = E[lambda]
-            mean_pred = lambdas.mean(axis=0)  # shape: (num_data,)
+            mean_pred = lambdas.mean(axis=0)
 
             if return_std:
                 # Standard deviation of prediction = Std[lambda]
-                std_pred = lambdas.std(axis=0)  # shape: (num_data,)
+                std_pred = lambdas.std(axis=0)
                 return mean_pred, std_pred
             else:
                 return mean_pred
@@ -499,7 +478,7 @@ class BayesianRegressor(BaseEstimator):
                         'gaussian': samples of predicted y
                         'poisson': samples of predicted y
         """
-        self.model.eval()  # Evaluation mode
+        self.model.eval()
         if isinstance(X, pd.DataFrame):
             X = X.values
         X_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
@@ -511,7 +490,7 @@ class BayesianRegressor(BaseEstimator):
             for _ in range(n_samples_eff):
                 output = (
                     self.model(X_tensor).cpu().numpy()
-                )  # shape: (num_data, output_dim)
+                )
 
                 y_sample: np.ndarray
                 if self.output_type == "gaussian":
@@ -522,19 +501,18 @@ class BayesianRegressor(BaseEstimator):
                     y_sample = np.random.normal(mus, sigmas)
                     sampled_outputs_list.append(
                         y_sample[:, np.newaxis]
-                    )  # Make it (num_data, 1)
+                    )
 
                 elif self.output_type == "poisson":
                     log_lambdas = output[:, 0]
                     lambdas = np.exp(log_lambdas)
                     # Sample from Poisson(lambda) for each data point
-                    y_sample = np.random.poisson(lambdas)  # shape: (num_data,)
+                    y_sample = np.random.poisson(lambdas)
                     sampled_outputs_list.append(
                         y_sample[:, np.newaxis]
-                    )  # Make it (num_data, 1)
-
+                    )
         # sampled_outputs_list contains arrays of shape (num_data, 1)
-        return np.array(sampled_outputs_list)  # shape: (n_samples_eff, num_data, 1)
+        return np.array(sampled_outputs_list)
 
     def plot_loss_history(self, title: str = "Training and Validation Loss"):
         """Plots the training and validation loss history."""

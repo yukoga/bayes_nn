@@ -15,6 +15,7 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 
 def plot_loss_history(
@@ -76,7 +77,8 @@ def plot_observed_vs_predicted(
     figsize: tuple = (7, 7),
 ):
     """
-    Plots observed vs. predicted values with a 95% confidence interval.
+    Plots observed vs. predicted values with a 95% confidence interval
+    and displays RMSE and MAE metrics.
 
     Args:
         y_true (np.ndarray): Array of true observed values.
@@ -87,10 +89,10 @@ def plot_observed_vs_predicted(
         ylabel (str): Label for the Y-axis.
         figsize (tuple): Figure size.
     """
-    plt.figure(figsize=figsize)
+    fig, ax = plt.subplots(figsize=figsize)  # Use fig, ax
 
     # Scatter plot of observed vs. predicted mean
-    plt.scatter(y_true, y_pred_mean, alpha=0.6, label="Predicted Mean")
+    ax.scatter(y_true, y_pred_mean, alpha=0.6, label="Predicted Mean")
 
     # Calculate 95% confidence interval bounds (mean +/- 1.96 * std)
     lower_bound = y_pred_mean - 1.96 * y_pred_std
@@ -113,13 +115,13 @@ def plot_observed_vs_predicted(
     min_val = min(np.min(y_true), np.min(y_pred_mean - 2 * y_pred_std))
     max_val = max(np.max(y_true), np.max(y_pred_mean + 2 * y_pred_std))
     # Add some padding to the limits
-    padding = (max_val - min_val) * 0.05
-    min_val -= padding
-    max_val += padding
+    padding = (max_val_data - min_val_data) * 0.05
+    min_val_plot = min_val_data - padding
+    max_val_plot = max_val_data + padding
 
-    plt.plot(
-        [min_val, max_val],
-        [min_val, max_val],
+    ax.plot(
+        [min_val_plot, max_val_plot],
+        [min_val_plot, max_val_plot],
         "r--",
         label="Ideal prediction line (y_observed = y_predicted)",
     )

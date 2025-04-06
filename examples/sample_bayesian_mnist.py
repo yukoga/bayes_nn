@@ -25,7 +25,7 @@ from sklearn.metrics import accuracy_score, classification_report
 # Import the created bayes_nn module
 try:
     # If installed via pip install .
-    from bayes_nn.models import BayesianClassifier
+    from bayes_nn import BayesianClassifier
 except ImportError:
     print("Please install the bayes_nn package first (e.g., 'pip install .')")
     print("Or adjust the Python path to include the project root.")

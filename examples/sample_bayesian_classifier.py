@@ -22,7 +22,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 
 try:
-    from bayes_nn.models import BayesianClassifier
+    from bayes_nn import BayesianClassifier
 except ImportError:
     print("Please install the bayes_nn package first (e.g., 'pip install .')")
     print("Or adjust the Python path to include the project root.")

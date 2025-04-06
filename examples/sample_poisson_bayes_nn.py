@@ -17,16 +17,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-# Import the created bayes_nn module
 import sys
 
-# sys.path.insert(
-#     0, os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-# )
-
 try:
-    from bayes_nn.models import BayesianRegressor
-    from bayes_nn.utils import plot_observed_vs_predicted
+    from bayes_nn import BayesianRegressor
+    from bayes_nn import plot_observed_vs_predicted
 except ImportError:
     print("Please install the bayes_nn package first (e.g., 'pip install .')")
     print("Or adjust the Python path to include the project root.")
@@ -68,7 +63,6 @@ def plot_predictions_poisson(
 
     # Obtain predictive distribution by sampling multiple times
     y_samples = model.predict_proba(X_pred_points, n_samples=n_samples_plot)
-    # y_samples shape: (n_samples_plot, num_pred_points, 1)
     y_samples = y_samples.squeeze(-1)  # (n_samples_plot, num_pred_points)
 
     # Mean and std dev of predictions (mean/std dev of predicted counts)
@@ -77,7 +71,7 @@ def plot_predictions_poisson(
     y_std = y_samples.std(axis=0)
 
     # (Optional) Mean rate calculated by predict method (stats of lambda)
-    # lambda_pred_mean, _ = model.predict(X_pred_points, return_std=True)
+    lambda_pred_mean, _ = model.predict(X_pred_points, return_std=True)
 
     # Plot the predictive mean count E[y]
     plt.plot(
@@ -100,23 +94,28 @@ def plot_predictions_poisson(
     )
 
     # (Optional Plotting of Lambda for reference)
-    # plt.plot(X_pred_points.flatten(), lambda_pred_mean, 'g--',
-    #          label='Mean Predicted Rate (λ)')
-    # lambda_pred_mean, lambda_pred_std = model.predict(
-    #     X_pred_points, return_std=True
-    # )
-    # plt.fill_between(X_pred_points.flatten(),
-    #                  lambda_pred_mean - 2 * lambda_pred_std,
-    #                  lambda_pred_mean + 2 * lambda_pred_std,
-    #                  color='g', alpha=0.1,
-    #                  label='Predictive Rate Uncertainty (λ ± 2*Std[λ])')
+    plt.plot(
+        X_pred_points.flatten(),
+        lambda_pred_mean,
+        "g--",
+        label="Mean Predicted Rate (λ)",
+    )
+    lambda_pred_mean, lambda_pred_std = model.predict(X_pred_points, return_std=True)
+    plt.fill_between(
+        X_pred_points.flatten(),
+        lambda_pred_mean - 2 * lambda_pred_std,
+        lambda_pred_mean + 2 * lambda_pred_std,
+        color="g",
+        alpha=0.1,
+        label="Predictive Rate Uncertainty (λ ± 2*Std[λ])",
+    )
 
     plt.xlabel("Input Feature (X)")
     plt.ylabel("Target Value (y - Counts)")
     plt.title(title)
     plt.legend()
     plt.grid(True)
-    plt.ylim(bottom=0)  # Counts are non-negative
+    plt.ylim(bottom=0)
     plt.tight_layout()
     plt.show()
 
@@ -131,10 +130,10 @@ if __name__ == "__main__":
 
     bnn_regressor = BayesianRegressor(
         input_dim=X_train.shape[1],
-        output_type="poisson",  # Output is Poisson distribution (log rate)
+        output_type="poisson",
         hidden_dims=[32, 32],
-        activation=torch.nn.Tanh(),  # Trying Tanh activation
-        n_epochs=300,  # Poisson might take a bit longer to train
+        activation=torch.nn.Tanh(),
+        n_epochs=300,
         batch_size=32,
         lr=0.003,
         kl_weight=0.1,
@@ -177,9 +176,9 @@ if __name__ == "__main__":
     y_pred_std_train = y_samples_train.std(axis=0)
 
     plot_observed_vs_predicted(
-        y_train,  # Observed counts
-        y_pred_mean_train,  # Predicted mean count E[y]
-        y_pred_std_train,  # Std dev of predicted mean count Std[E[y]]
+        y_train,
+        y_pred_mean_train,
+        y_pred_std_train,
         title="Poisson BNN: Observed vs. Predicted Counts (Train)",
         xlabel="Observed Counts",
         ylabel="Predicted Mean Count E[y]",

@@ -23,9 +23,9 @@ from .layers import BayesianLinear
 from .losses import ELBO, GaussianNLLLoss, PoissonNLLLoss
 from .models import (
     BayesianRegressor,
-    # BayesianClassifier,
+    BayesianClassifier,
 )
-from .utils import plot_loss_history
+from .utils import plot_loss_history, plot_observed_vs_predicted
 
 __all__ = [
     "BayesianLinear",
@@ -33,6 +33,7 @@ __all__ = [
     "GaussianNLLLoss",
     "PoissonNLLLoss",
     "BayesianRegressor",
-    # "BayesianClassifier",
+    "BayesianClassifier",
     "plot_loss_history",
+    "plot_observed_vs_predicted",
 ]

@@ -16,20 +16,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-
-# Import the created bayes_nn module
-# (Assuming execution from the project root)
 import sys
 
-# Add project root to the path (adjust according to your environment)
-# sys.path.insert(
-#     0, os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-# )
-
 try:
-    # If installed via pip install .
-    from bayes_nn.models import BayesianRegressor
-    from bayes_nn.utils import plot_observed_vs_predicted
+    from bayes_nn import BayesianRegressor
+    from bayes_nn import plot_observed_vs_predicted
 except ImportError:
     print("Please install the bayes_nn package first (e.g., 'pip install .')")
     print("Or adjust the Python path to include the project root.")
@@ -71,14 +62,7 @@ def plot_predictions_gaussian(
 
     # Obtain predictive distribution by sampling multiple times
     y_samples = model.predict_proba(X_pred_points, n_samples=n_samples_plot)
-    # y_samples shape: (n_samples_plot, num_pred_points, 1)
-    y_samples = y_samples.squeeze(-1)  # (n_samples_plot, num_pred_points)
-
-    # Calculate mean and standard deviation of predictions
-    # y_mean = y_samples.mean(axis=0) # Unused variable removed
-    # y_std = y_samples.std( # Unused variable removed
-    #     axis=0
-    # )  # This is the std dev of E[y] (close to epistemic uncertainty)
+    y_samples = y_samples.squeeze(-1)
 
     # Mean and std dev calculated by predict method (includes aleatoric)
     y_pred_mean_total, y_pred_std_total = model.predict(X_pred_points, return_std=True)
@@ -129,28 +113,26 @@ if __name__ == "__main__":
 
     bnn_regressor = BayesianRegressor(
         input_dim=X_train.shape[1],
-        # Break output_type comment
-        output_type="gaussian",  # Output is Gaussian (mean, variance)
-        hidden_dims=[32, 32],  # Hidden layer configuration
-        activation=torch.nn.ReLU(),  # Activation function
-        n_epochs=200,  # Number of training epochs
-        batch_size=32,  # Batch size
-        lr=0.005,  # Learning rate
-        # Break kl_weight comment
-        kl_weight=0.1,  # KL term weight (adjust based on data size)
-        n_samples_predict=100,  # Number of samples for prediction
-        optimizer_cls=torch.optim.AdamW,  # Optimizer
-        validation_split=0.2,  # Proportion of validation data
-        early_stopping_patience=15,  # Early Stopping patience
-        device=device,  # Device to use
-        random_state=42,  # Random seed
+        output_type="gaussian",
+        hidden_dims=[32, 32],
+        activation=torch.nn.ReLU(),
+        n_epochs=200,
+        batch_size=32,
+        lr=0.005,
+        kl_weight=0.1,
+        n_samples_predict=100,
+        optimizer_cls=torch.optim.AdamW,
+        validation_split=0.2,
+        early_stopping_patience=15,
+        device=device,
+        random_state=42,
     )
 
     # --- 2.5 Plot Network Architecture ---
-    print("\nPlotting network architecture...")
-    bnn_regressor.plot_network_architecture(
-        filename="normal_bnn_architecture", view=False
-    )
+    # print("\nPlotting network architecture...")
+    # bnn_regressor.plot_network_architecture(
+    #     filename="normal_bnn_architecture", view=False
+    # )
 
     # --- 3. Model Training ---
     print("\nStarting training...")
@@ -159,11 +141,9 @@ if __name__ == "__main__":
 
     # --- 4. Plotting Training Results ---
     # Plot loss history
-    # Break plot_loss_history call
     bnn_regressor.plot_loss_history(title="Gaussian BNN: Training and Validation Loss")
 
     # Plot prediction results
-    # Break plot_predictions_gaussian call
     plot_predictions_gaussian(
         X_train,
         y_train,
@@ -188,7 +168,6 @@ if __name__ == "__main__":
 
     print("\nPredictions for new data points:")
     for i in range(X_new.shape[0]):
-        # Break print line
         print(
             f"Input: {X_new[i, 0]:.2f}, "
             f"Predicted Mean: {y_pred_mean[i]:.2f}, "
@@ -198,4 +177,4 @@ if __name__ == "__main__":
     # Get samples from the predictive distribution
     y_samples_new = bnn_regressor.predict_proba(X_new, n_samples=5)
     print("\nSamples from predictive distribution for new data:")
-    print(y_samples_new)  # shape: (5, 3, 1)
+    print(y_samples_new)
